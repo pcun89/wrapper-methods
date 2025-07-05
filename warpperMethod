@@ -1,0 +1,84 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.feature_selection import RFE
+from sklearn.metrics import accuracy_score
+from mlxtend.feature_selection import SequentialFeatureSelector as SFS
+
+def main():
+    # Load and prepare the dataset
+    df = pd.read_csv("obesity_data.csv")  # Make sure this file is in the same directory
+    X = df.drop("NObeyesdad", axis=1)
+    y = df["NObeyesdad"]
+
+    # Split dataset
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Baseline model with all features
+    base_model = LogisticRegression(max_iter=1000)
+    base_model.fit(X_train, y_train)
+    base_pred = base_model.predict(X_test)
+    base_accuracy = accuracy_score(y_test, base_pred)
+    print(f"Baseline Accuracy (all features): {base_accuracy:.4f}")
+
+    # ===== Sequential Forward Selection (SFS) =====
+    sfs = SFS(
+        LogisticRegression(max_iter=1000),
+        k_features="best",
+        forward=True,
+        floating=False,
+        scoring="accuracy",
+        cv=5,
+        n_jobs=-1
+    )
+    sfs = sfs.fit(X_train.values, y_train.values)
+    sfs_features = list(sfs.k_feature_names_)
+    print("SFS selected features:", sfs_features)
+
+    lr_sfs = LogisticRegression(max_iter=1000)
+    lr_sfs.fit(X_train[sfs_features], y_train)
+    sfs_pred = lr_sfs.predict(X_test[sfs_features])
+    sfs_acc = accuracy_score(y_test, sfs_pred)
+    print(f"SFS Accuracy: {sfs_acc:.4f}")
+
+    # ===== Sequential Backward Floating Selection (SBFS) =====
+    sbfs = SFS(
+        LogisticRegression(max_iter=1000),
+        k_features="best",
+        forward=False,
+        floating=True,
+        scoring="accuracy",
+        cv=5,
+        n_jobs=-1
+    )
+    sbfs = sbfs.fit(X_train.values, y_train.values)
+    sbfs_features = list(sbfs.k_feature_names_)
+    print("SBFS selected features:", sbfs_features)
+
+    lr_sbfs = LogisticRegression(max_iter=1000)
+    lr_sbfs.fit(X_train[sbfs_features], y_train)
+    sbfs_pred = lr_sbfs.predict(X_test[sbfs_features])
+    sbfs_acc = accuracy_score(y_test, sbfs_pred)
+    print(f"SBFS Accuracy: {sbfs_acc:.4f}")
+
+    # ===== Recursive Feature Elimination (RFE) =====
+    rfe_selector = RFE(LogisticRegression(max_iter=1000), n_features_to_select=10)
+    rfe_selector.fit(X_train, y_train)
+    rfe_features = X_train.columns[rfe_selector.support_].tolist()
+    print("RFE selected features:", rfe_features)
+
+    lr_rfe = LogisticRegression(max_iter=1000)
+    lr_rfe.fit(X_train[rfe_features], y_train)
+    rfe_pred = lr_rfe.predict(X_test[rfe_features])
+    rfe_acc = accuracy_score(y_test, rfe_pred)
+    print(f"RFE Accuracy: {rfe_acc:.4f}")
+
+    # ===== Accuracy Comparison =====
+    print("\n--- Model Performance Comparison ---")
+    print(f"All Features: {base_accuracy:.4f}")
+    print(f"SFS:          {sfs_acc:.4f}")
+    print(f"SBFS:         {sbfs_acc:.4f}")
+    print(f"RFE:          {rfe_acc:.4f}")
+
+if __name__ == "__main__":
+    main()
