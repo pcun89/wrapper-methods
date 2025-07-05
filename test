@@ -1,0 +1,62 @@
+import pandas as pd
+import numpy as np
+import pytest
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+from sklearn.feature_selection import RFE
+from mlxtend.feature_selection import SequentialFeatureSelector as SFS
+
+# ---------- Synthetic Dataset Fixture ----------
+@pytest.fixture
+def synthetic_data():
+    np.random.seed(42)
+    X = pd.DataFrame(np.random.randint(0, 5, size=(100, 10)), columns=[f"feat_{i}" for i in range(10)])
+    y = np.random.choice(["Obese", "Normal", "Overweight"], size=100)
+    return train_test_split(X, y, test_size=0.2, random_state=42)
+
+
+# ---------- Tests ----------
+
+def test_baseline_accuracy(synthetic_data):
+    X_train, X_test, y_train, y_test = synthetic_data
+    model = LogisticRegression(max_iter=1000)
+    model.fit(X_train, y_train)
+    preds = model.predict(X_test)
+    acc = accuracy_score(y_test, preds)
+    assert acc > 0  # Should be non-zero accuracy
+
+
+def test_sfs_selection(synthetic_data):
+    X_train, X_test, y_train, y_test = synthetic_data
+    sfs = SFS(LogisticRegression(max_iter=1000),
+              k_features=5,
+              forward=True,
+              floating=False,
+              scoring="accuracy",
+              cv=3)
+    sfs.fit(X_train.values, y_train)
+    selected = list(sfs.k_feature_names_)
+    assert len(selected) == 5
+
+
+def test_sbfs_selection(synthetic_data):
+    X_train, X_test, y_train, y_test = synthetic_data
+    sbfs = SFS(LogisticRegression(max_iter=1000),
+               k_features=5,
+               forward=False,
+               floating=True,
+               scoring="accuracy",
+               cv=3)
+    sbfs.fit(X_train.values, y_train)
+    selected = list(sbfs.k_feature_names_)
+    assert len(selected) == 5
+
+
+def test_rfe_selection(synthetic_data):
+    X_train, X_test, y_train, y_test = synthetic_data
+    model = LogisticRegression(max_iter=1000)
+    rfe = RFE(estimator=model, n_features_to_select=5)
+    rfe.fit(X_train, y_train)
+    selected = X_train.columns[rfe.support_]
+    assert len(selected) == 5
